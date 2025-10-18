@@ -86,7 +86,7 @@ class Planogram:
 
         for page in self.doc:
             text = page.get_text()
-            if not all(term in text for term in ["Loc. ID", "Status", "CRC", "Description", "Barcode"]):
+            if not all(term in text for term in ["Status", "CRC", "Description", "Barcode"]):
                 continue
 
             # Extract Num-CRC pairs
