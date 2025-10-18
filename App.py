@@ -15,6 +15,7 @@ from POGSearch import get_pog_links, level_of
 from Telxon import Telxon
 from WorkerThread import WorkerThread
 from verify_payload import verify_payload
+import Label
 
 """
 Helper to access resources both in development and in PyInstaller executable
@@ -179,6 +180,53 @@ class MainWindow(QMainWindow):
             self.append_status(f"[POG Extraction] Finished parsing {num_items} items.")
             # Re-enable POG input if desired
             self.pog_input.setEnabled(True)
+
+            from functools import partial
+            from PySide6.QtCore import QSemaphore
+
+            chunk_size = 5
+            lan_id = self.config_manager.get('lan')
+            semaphore = QSemaphore(1)  # Global semaphore for download()
+
+            chunks = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
+
+            worker_tuples = []
+            download_callbacks = []
+
+            for i, (df_chunk, telxon_instance) in enumerate(chunks):
+                label = f"Chunk_{i+1}"
+
+                # Create a scan worker
+                worker = WorkerThread(
+                    telxon_instance.scan_labels,
+                    df_chunk,
+                    self.label_size,
+                    (self.config_manager.get('yid'), self.config_manager.get('pwd')),
+                    self.visibility
+                )
+                worker_tuples.append((worker, label))
+
+                # Capture the correct instance for per-result callback
+                def make_callback(instance):
+                    def _callback(_):
+                        self.append_status(f"[{label}] Starting download...")
+                        try:
+                            semaphore.acquire()
+                            path = instance.download(lan_id, False, self.append_status)
+                            self.append_status(f"[{label}] Downloaded to: {path}")
+                        finally:
+                            semaphore.release()
+                    return _callback
+
+                download_callbacks.append(make_callback(telxon_instance))
+
+            # Combine everything under MultiWorkerManager
+            manager = MultiWorkerManager(
+                worker_tuples,
+                status_logger=self.append_status,
+                per_result_callback=lambda result: download_callbacks.pop(0)(result)  # call in order
+            )
+            manager.start()
 
         pog_worker = WorkerThread(
             planogram.get_pog,
