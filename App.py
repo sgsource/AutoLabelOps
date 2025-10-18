@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget,
     QSplashScreen, QMessageBox, QDialog, QLabel, QRadioButton, QButtonGroup,
-    QLineEdit, QTextEdit
+    QLineEdit, QTextEdit, QCheckBox
 )
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt
@@ -74,6 +74,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.pog_label)
         layout.addWidget(self.pog_input)
 
+        # --- Visibility ---
+        self.visibility = False
+        checkbox = QCheckBox("Visible")
+        checkbox.toggled.connect(self._on_checkbox_toggle)
+        layout.addWidget(checkbox)
+
         # --- POG Items Info ---
         self.pog_count_label = QLabel("POG Items: 0")
         layout.addWidget(self.pog_count_label)
@@ -128,14 +134,14 @@ class MainWindow(QMainWindow):
             telxon.get_level,
             pog_text,
             creds,
-            False,
+            self.visibility,
             status_callback=lambda msg: self.append_status(f"[Telxon] {msg}")
         )
 
         pog_worker = WorkerThread(
             get_pog_links,
             pog_text,
-            False,
+            self.visibility,
             status_callback=lambda msg: self.append_status(f"[POG Search] {msg}")
         )
 
@@ -189,6 +195,9 @@ class MainWindow(QMainWindow):
     """
     Utilities
     """
+    def _on_checkbox_toggle(self, checked):
+        self.visibility = checked
+
     # Helper to append messages safely from any thread
     def append_status(self, msg: str):
         self.status_log.append(msg)
