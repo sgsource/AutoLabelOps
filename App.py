@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt
 from ConfigManager import ConfigManager
 from CredentialsDialog import CredentialsDialog
 from MultiWorkerManager import MultiWorkerManager
+from PDFParser import Planogram
 from POGSearch import get_pog_links
 from Telxon import Telxon
 from WorkerThread import WorkerThread
@@ -23,7 +24,7 @@ def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
     except AttributeError:
-        base_path = os.path.abspath(".")
+        base_path = os.path.abspath("./assets/")
     return os.path.join(base_path, relative_path)
 
 
@@ -39,13 +40,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
 
         # --- Action Buttons ---
-        self.label_btn = QPushButton("Generate Labels")
-        self.flag_btn = QPushButton("Run Flag Report")
         self.edit_creds_btn = QPushButton("Edit Credentials")
         self.edit_creds_btn.clicked.connect(self.edit_credentials)
 
-        layout.addWidget(self.label_btn)
-        layout.addWidget(self.flag_btn)
         layout.addWidget(self.edit_creds_btn)
 
         # --- Label Size Section ---
@@ -76,6 +73,18 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.pog_label)
         layout.addWidget(self.pog_input)
+
+        # --- POG Items Info ---
+        self.pog_count_label = QLabel("POG Items: 0")
+        layout.addWidget(self.pog_count_label)
+
+        self.range_from_input = QLineEdit()
+        self.range_from_input.setPlaceholderText("From (1)")
+        layout.addWidget(self.range_from_input)
+
+        self.range_to_input = QLineEdit()
+        self.range_to_input.setPlaceholderText("To (N)")
+        layout.addWidget(self.range_to_input)
 
         self.status_log = QTextEdit()
         self.status_log.setReadOnly(True)
@@ -113,7 +122,7 @@ class MainWindow(QMainWindow):
         self.pog_input.setEnabled(False)
         self.status_log.clear()
 
-        """ Getting POG level """
+        """ Getting POG level AND PDFs """
         telxon = Telxon()
         telxon_worker = WorkerThread(
             telxon.get_level,
@@ -130,15 +139,48 @@ class MainWindow(QMainWindow):
             status_callback=lambda msg: self.append_status(f"[POG Search] {msg}")
         )
 
-        def final(results):
-            telxon_level, pog_links = results
-            self.append_status(f"Both workers done: Level={telxon_level}, {len(pog_links)} POG links")
-            my_func(telxon_level, pog_links)
-
         manager = MultiWorkerManager(
             [(telxon_worker, 'Level'), (pog_worker, 'POG Search')],
             status_logger=self.append_status,
-            final_callback=final
+            final_callback=self._extract_pog_data
+        )
+        manager.start()
+    
+    def _extract_pog_data(self, results):
+        level, pog_links = results
+        self.append_status(f"Level={level}, {len(pog_links)} POG links")
+
+        i = int(level) - 1
+        pog_pdf = pog_links[i]
+
+        planogram = Planogram()
+        name = '[POG Extraction]'
+
+        # Final callback for this worker
+        def pog_final(results):
+            pog_df = results[0]  # get_pog returns a single DataFrame
+            self.pog_df = pog_df
+
+            num_items = len(pog_df)
+            self.pog_count_label.setText(f"POG Items: {num_items}")
+
+            # Set default range
+            self.range_from_input.setText("1")
+            self.range_to_input.setText(str(num_items))
+
+            self.append_status(f"[POG Extraction] Finished parsing {num_items} items.")
+            # Re-enable POG input if desired
+            self.pog_input.setEnabled(True)
+
+        pog_worker = WorkerThread(
+            planogram.get_pog,
+            pog_pdf,
+            status_callback=lambda msg: self.append_status(f"{name} {msg}")
+        )
+        manager = MultiWorkerManager(
+            [(pog_worker, name)],
+            status_logger=self.append_status,
+            final_callback=pog_final
         )
         manager.start()
     

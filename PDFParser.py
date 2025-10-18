@@ -3,7 +3,6 @@ import pandas as pd
 import urllib.request
 import fitz  # PyMuPDF
 
-
 class Planogram:
     """
     Planogram PDF parser using PyMuPDF for faster text extraction.
@@ -17,17 +16,27 @@ class Planogram:
         """Reset internal state"""
         self.doc = None
         self.pog_df = pd.DataFrame()
+        self.status_callback = lambda msg: print(msg)
 
-    def get_pog(self, path: str) -> pd.DataFrame:
+    def get_pog(self, path: str, status_callback=None) -> pd.DataFrame:
         """
         Main entry point.
         path: local file path or HTTP/HTTPS URL of a PDF.
         Returns a DataFrame indexed by CRC with columns Num and UPC.
         """
+        # Allow dynamic callback per call
+        if status_callback:
+            self.status_callback = status_callback
+
         try:
+            self.status_callback(f"Loading PDF from {path}...")
             self._load_file(path)
-            self.get_pog_num()  # validate POG number
+
+            pog_num = self.get_pog_num()
+            self.status_callback(f"POG number found: {pog_num}")
+
             self.pog_df = self._parse_data()
+            self.status_callback(f"Parsed {len(self.pog_df)} items successfully.")
             return self.pog_df
         except Exception as e:
             raise RuntimeError(f"Failed to load {path}: {e}")
@@ -35,7 +44,7 @@ class Planogram:
             # Ensure PDF is closed after parsing to free memory
             if self.doc:
                 self.doc.close()
-                self.doc = None
+                self._reset()
 
     def _load_file(self, path: str):
         """Load PDF from local path or URL"""
