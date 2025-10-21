@@ -68,57 +68,54 @@ class Telxon:
         driver = self.driver
 
         # Click the submit button (I assume you want to click it, not just find it)
-        submit_btn = WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 10, poll_frequency=0.15).until(
             EC.element_to_be_clickable((By.ID, 'B4986078001920273596'))
-        )
-        submit_btn.click()
+        ).click()
 
-        # Wait until a <p> tag containing the text "has been scheduled for delivery to machine" is visible
-        wait = WebDriverWait(driver, 20, poll_frequency=0.5)
-        wait.until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "//p[contains(text(), 'has been scheduled for delivery to machine')]")
-            )
+        submit_msg = WebDriverWait(driver, 15, poll_frequency=0.15).until(
+            EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'has been scheduled for delivery to machine')]"))
         )
+        print_id = submit_msg.text[12:18]
 
         # Then continue with going to email etc
         driver.get('https://outlook.office365.com/mail/')
 
         # Sign in
-        email_input = WebDriverWait(driver, 10).until(
+        email_input = WebDriverWait(driver, 20).until(
             EC.visibility_of_element_located((By.ID, 'i0116'))
         )
         email_input.send_keys(f'{lan_id}@aafes.com')
-        driver.find_element(By.ID, 'idSIButton9').click()
+        WebDriverWait(driver, 20, poll_frequency=0.15).until(
+            EC.element_to_be_clickable((By.ID, 'idSIButton9'))
+        ).click()
+        # driver.find_element(By.ID, 'idSIButton9').click()
 
-        # Find email with attachments
-        partial_text = 'Has attachments machine PCL Report from ASAP PMrpt'
-        partial_match_element = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, '{partial_text}')]"))
+        # must click entry, no preview.
+        mail_entry = WebDriverWait(driver, 20, poll_frequency=0.15).until(
+            EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, 'Has attachments machine PCL Report from ASAP PMrpt{print_id}')]"))
         )
-        partial_match_element.click()
+        # aria-label="Has attachments machine PCL Report from ASAP PMrpt020683 7:38 AM No preview is available."
+        # PCL Report from ASAP PMrpt020683
 
-        # Find PDF attachment
-        partial_text_pdf = '.pdf'
-        attachment_element = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, '{partial_text_pdf}')]"))
-        )
-        filename = attachment_element.text
-        attachment_element.click()
+        mail_entry.click()
 
-        # Wait a moment for UI to update before clicking download
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, 'Download')]"))
-        )
-        download_element = driver.find_element(By.XPATH, f"//*[contains(@aria-label, 'Download')]")
-        download_element.click()
+        WebDriverWait(driver, 20, poll_frequency=0.15).until(
+            EC.element_to_be_clickable((By.XPATH, f"//div[@title='PMrpt{print_id}.pdf']"))
+        ).click()
+
+        WebDriverWait(driver, 20, poll_frequency=0.15).until(
+            EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']"))
+        ).click()
+
+        time.sleep(2)
 
         # teardown
         self.driver.quit()
         self.driver = None
 
-        return self._get_full_path(filename.split('\n')[0])
+        filename = f'PMrpt{print_id}.pdf'
 
+        return self._get_full_path(filename)
     
     def _get_full_path(self, filename: str):
         home_directory = pathlib.Path.home()
@@ -150,7 +147,7 @@ class Telxon:
             self.driver = webdriver.Chrome(options=options)
 
         driver = self.driver
-        wait = WebDriverWait(driver, 15, poll_frequency=0.25)
+        wait = WebDriverWait(driver, 15, poll_frequency=0.15)
 
         driver.get(self.telxon_url)
         update_status("Navigating to login...")
@@ -230,6 +227,8 @@ class Telxon:
 if __name__ == "__main__":
     import sys
     import time
+    import os
+    import fitz
 
     if __name__ == "__main__":
         o = Telxon()
@@ -240,6 +239,20 @@ if __name__ == "__main__":
             '6314524': { "Num": 4 },
         }
         df = pd.DataFrame.from_dict(data, orient='index')
-        o.scan_labels(df, 2, ('543697', 'Iiop890'), True)
-        filepath = o.download('ohso', True)
+        vis = False
+        o.scan_labels(df, 2, ('543697', 'Iiop890'), vis)
+        filepath = o.download('ohso', vis)
         print(filepath)
+
+        # # Open the generated PDF cross-platform
+        # outfile_path = os.path.abspath("numbered_labels.pdf")
+        # try:
+        #     if sys.platform.startswith("win"):
+        #         os.startfile(outfile_path)
+        #     elif sys.platform.startswith("darwin"):
+        #         subprocess.Popen(["open", outfile_path])
+        #     else:  # Linux
+        #         subprocess.Popen(["xdg-open", outfile_path])
+        #     self.status_label.setText("Labels generated and opened. Closing app...")
+        # except Exception as e:
+        #     self.status_label.setText("Failed to open PDF")
