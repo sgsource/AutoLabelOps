@@ -67,6 +67,12 @@ class Telxon:
     def download(self, lan_id, visibility=False, status_callback=None):
         driver = self.driver
 
+        def update_status(msg):
+            if status_callback:
+                status_callback(msg)
+            else:
+                print(msg)
+
         # Click the submit button (I assume you want to click it, not just find it)
         WebDriverWait(driver, 10, poll_frequency=0.15).until(
             EC.element_to_be_clickable((By.ID, 'B4986078001920273596'))
@@ -76,6 +82,7 @@ class Telxon:
             EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'has been scheduled for delivery to machine')]"))
         )
         print_id = submit_msg.text[12:18]
+        update_status(f'Labels saved as PMrpt{print_id}')
 
         # Then continue with going to email etc
         driver.get('https://outlook.office365.com/mail/')
@@ -99,7 +106,7 @@ class Telxon:
 
         mail_entry.click()
 
-        WebDriverWait(driver, 20, poll_frequency=0.15).until(
+        WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.XPATH, f"//div[@title='PMrpt{print_id}.pdf']"))
         ).click()
 
@@ -114,6 +121,7 @@ class Telxon:
         self.driver = None
 
         filename = f'PMrpt{print_id}.pdf'
+        
 
         return self._get_full_path(filename)
     
@@ -240,7 +248,7 @@ if __name__ == "__main__":
         }
         df = pd.DataFrame.from_dict(data, orient='index')
         vis = False
-        o.scan_labels(df, 2, ('543697', 'Iiop890'), vis)
+        o.scan_labels(df, 2, ('543697', ''), vis)
         filepath = o.download('ohso', vis)
         print(filepath)
 

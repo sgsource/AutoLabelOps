@@ -1,3 +1,4 @@
+import math
 import sys
 import os
 from PySide6.QtWidgets import (
@@ -153,6 +154,20 @@ class MainWindow(QMainWindow):
         )
         manager.start()
     
+    def scan_and_download(self, df_chunk, telxon_instance, label_size, creds, visibility, lan_id, semaphore, status_callback=None):
+        telxon_instance.scan_labels(df_chunk, label_size, creds, visibility, status_callback)
+
+        if status_callback:
+            status_callback("Waiting for download slot...")
+
+        semaphore.acquire()
+        try:
+            result = telxon_instance.download(lan_id, visibility, status_callback)
+        finally:
+            semaphore.release()
+
+        return result  # Will be emitted via WorkerThread.finished
+    
     def _extract_pog_data(self, results):
         level, pog_links = results
         self.append_status(f"Level={level}, {len(pog_links)} POG links")
@@ -184,49 +199,47 @@ class MainWindow(QMainWindow):
             from functools import partial
             from PySide6.QtCore import QSemaphore
 
-            chunk_size = 5
+            n = len(pog_df)
+            div_factor = 2
+            chunk_size = math.ceil(n // div_factor)
+            # chunk_size = n // div_factor
+            lan_id = self.config_manager.get('lan')
+            semaphore = QSemaphore(1)  # Global semaphore for download()
+
+            chunks = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
+
+            n = len(pog_df)
+            div_factor = 2
+            chunk_size = n // div_factor
             lan_id = self.config_manager.get('lan')
             semaphore = QSemaphore(1)  # Global semaphore for download()
 
             chunks = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
 
             worker_tuples = []
-            download_callbacks = []
 
             for i, (df_chunk, telxon_instance) in enumerate(chunks):
-                label = f"Chunk_{i+1}"
+                label = f"Chunk_{i+1} ({i+1}-{i+chunk_size+1})"
 
-                # Create a scan worker
                 worker = WorkerThread(
-                    telxon_instance.scan_labels,
+                    self.scan_and_download,
                     df_chunk,
+                    telxon_instance,
                     self.label_size,
                     (self.config_manager.get('yid'), self.config_manager.get('pwd')),
-                    self.visibility
+                    self.visibility,
+                    lan_id,
+                    semaphore
                 )
                 worker_tuples.append((worker, label))
 
-                # Capture the correct instance for per-result callback
-                def make_callback(instance):
-                    def _callback(_):
-                        self.append_status(f"[{label}] Starting download...")
-                        try:
-                            semaphore.acquire()
-                            path = instance.download(lan_id, False, self.append_status)
-                            self.append_status(f"[{label}] Downloaded to: {path}")
-                        finally:
-                            semaphore.release()
-                    return _callback
-
-                download_callbacks.append(make_callback(telxon_instance))
-
-            # Combine everything under MultiWorkerManager
             manager = MultiWorkerManager(
                 worker_tuples,
                 status_logger=self.append_status,
-                per_result_callback=lambda result: download_callbacks.pop(0)(result)  # call in order
+                per_result_callback=lambda path: self.append_status(f"[Downloaded] {path}")
             )
             manager.start()
+
 
         pog_worker = WorkerThread(
             planogram.get_pog,

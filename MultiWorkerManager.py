@@ -29,6 +29,7 @@ class MultiWorkerManager(QObject):
             worker.error.connect(lambda e, n=name: status_logger(f"[{n}] ERROR: {e}"))
 
     def start(self):
+        self._post_threads = []
         for worker in self.workers:
             worker.start()
 
@@ -36,7 +37,6 @@ class MultiWorkerManager(QObject):
         self.results[index] = result
         self.finished_count += 1
 
-        # Start serialized per-result post-processing in a separate thread
         if self.per_result_callback:
             post_thread = QThread()
             worker = PostProcessor(result, self.per_result_callback, self.semaphore)
@@ -46,6 +46,12 @@ class MultiWorkerManager(QObject):
             worker.finished.connect(post_thread.quit)
             worker.finished.connect(worker.deleteLater)
             post_thread.finished.connect(post_thread.deleteLater)
+
+            # 👇 prevent premature destruction
+            self._post_threads.append(post_thread)
+
+            # Cleanup: remove from list after thread finishes
+            post_thread.finished.connect(lambda: self._post_threads.remove(post_thread))
 
             post_thread.start()
 
