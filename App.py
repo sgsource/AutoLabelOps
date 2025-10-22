@@ -1,6 +1,7 @@
 import math
 import sys
 import os
+import time
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget,
     QSplashScreen, QMessageBox, QDialog, QLabel, QRadioButton, QButtonGroup,
@@ -109,6 +110,10 @@ class MainWindow(QMainWindow):
     """
     # Pog entered handler
     def _pog_entered(self):
+        self.start_time = time.time()
+        self.append_status(f't_start={self.start_time}s')
+        print(f't_start={self.start_time}s')
+
         pog_text = self.pog_input.text().strip()
         if not pog_text.isdigit() or not (5 <= len(pog_text) <= 6):
             QMessageBox.warning(self, "Invalid POG", "POG must be 5 or 6 digits.")
@@ -181,7 +186,7 @@ class MainWindow(QMainWindow):
         planogram = Planogram()
         name = 'POG Extraction'
 
-        # Final callback for this worker
+        # Final callback for this workFer
         def pog_final(results):
             pog_df = results[0]  # get_pog returns a single DataFrame
             self.pog_df = pog_df
@@ -210,7 +215,7 @@ class MainWindow(QMainWindow):
             # partitions = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
 
             n = len(pog_df)
-            num_partitions = 2
+            num_partitions = 3
             min_partition_size = 20 if self.label_size == 1 else 32
             partition_size = math.ceil(n / (num_partitions * min_partition_size)) * min_partition_size
             lan_id = self.config_manager.get('lan')
@@ -221,7 +226,7 @@ class MainWindow(QMainWindow):
             worker_tuples = []
 
             for i, (df_partition, telxon_instance) in enumerate(partitions):
-                label = f"Partition{i+1} ({i+1}-{i+partition_size})"
+                label = f"Partition [Start={(i*partition_size)+1}]"
 
                 worker = WorkerThread(
                     self.scan_and_download,
@@ -294,6 +299,9 @@ class MainWindow(QMainWindow):
 
             # 4. Save to file
             labeler.decorate_labels(self.pog_df, outfile="final_labels")
+
+            self.append_status(f't_total:{time.time() - self.start_time}s')
+            print(f't_total:{time.time() - self.start_time}s')
 
             # 5. Open file
             if sys.platform.startswith("win"):

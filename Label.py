@@ -74,46 +74,49 @@ class Telxon:
                 print(msg)
 
         # Click the submit button (I assume you want to click it, not just find it)
-        WebDriverWait(driver, 10, poll_frequency=0.15).until(
+        WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.ID, 'B4986078001920273596'))
         ).click()
+        update_status('Submit button pressed')
 
-        submit_msg = WebDriverWait(driver, 15, poll_frequency=0.15).until(
+        submit_msg = WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'has been scheduled for delivery to machine')]"))
         )
         print_id = submit_msg.text[12:18]
-        update_status(f'Labels saved as PMrpt{print_id}')
+        update_status(f'Labels sent to email as PMrpt{print_id}')
 
         # Then continue with going to email etc
         driver.get('https://outlook.office365.com/mail/')
 
         # Sign in
-        email_input = WebDriverWait(driver, 20).until(
+        email_input = WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.visibility_of_element_located((By.ID, 'i0116'))
         )
         email_input.send_keys(f'{lan_id}@aafes.com')
-        WebDriverWait(driver, 20, poll_frequency=0.15).until(
+        WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.ID, 'idSIButton9'))
         ).click()
         # driver.find_element(By.ID, 'idSIButton9').click()
+        update_status('Email accessed')
 
         # must click entry, no preview.
-        mail_entry = WebDriverWait(driver, 20, poll_frequency=0.15).until(
+        mail_entry = WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, 'Has attachments machine PCL Report from ASAP PMrpt{print_id}')]"))
         )
         # aria-label="Has attachments machine PCL Report from ASAP PMrpt020683 7:38 AM No preview is available."
         # PCL Report from ASAP PMrpt020683
-
         mail_entry.click()
+        update_status('Found web element in inbox')
 
         WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.XPATH, f"//div[@title='PMrpt{print_id}.pdf']"))
         ).click()
-        update_status(f'Found web element in mail')
+        update_status(f'Found PDF in email')
 
-        WebDriverWait(driver, 20, poll_frequency=0.15).until(
+        WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']"))
         ).click()
+        update_status('Pressed Download')
 
         time.sleep(2)
 
@@ -122,7 +125,7 @@ class Telxon:
         self.driver = None
 
         filename = f'PMrpt{print_id}.pdf'
-        
+        update_status(f'{filename} saved')
 
         return self._get_full_path(filename)
     
