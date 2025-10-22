@@ -109,6 +109,7 @@ class Telxon:
         WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.XPATH, f"//div[@title='PMrpt{print_id}.pdf']"))
         ).click()
+        update_status(f'Found web element in mail')
 
         WebDriverWait(driver, 20, poll_frequency=0.15).until(
             EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']"))
@@ -210,7 +211,9 @@ class Telxon:
                 info_element = wait.until(
                     EC.visibility_of_element_located((By.ID, 'P127_INFO'))
                 )
-                update_status(f'================\n{info_element.text}')
+                # update_status(f'================\n{info_element.text}')
+                scanned_infos = info_element.text.split('\n')
+                update_status(f'{scanned_infos[0]}\t{scanned_infos[4]}')
 
                 # Confirm label was added
                 wait.until(

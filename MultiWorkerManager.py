@@ -47,7 +47,7 @@ class MultiWorkerManager(QObject):
             worker.finished.connect(worker.deleteLater)
             post_thread.finished.connect(post_thread.deleteLater)
 
-            # 👇 prevent premature destruction
+            # prevent premature destruction
             self._post_threads.append(post_thread)
 
             # Cleanup: remove from list after thread finishes

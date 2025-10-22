@@ -10,6 +10,7 @@ from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt
 from ConfigManager import ConfigManager
 from CredentialsDialog import CredentialsDialog
+import LabelDecorator
 from MultiWorkerManager import MultiWorkerManager
 from PDFParser import Planogram
 from POGSearch import get_pog_links, level_of
@@ -154,7 +155,7 @@ class MainWindow(QMainWindow):
         )
         manager.start()
     
-    def scan_and_download(self, df_chunk, telxon_instance, label_size, creds, visibility, lan_id, semaphore, status_callback=None):
+    def scan_and_download(self, df_chunk, telxon_instance, label_size, creds, visibility, lan_id, semaphore, status_callback=None, range_label=-1):
         telxon_instance.scan_labels(df_chunk, label_size, creds, visibility, status_callback)
 
         if status_callback:
@@ -166,7 +167,7 @@ class MainWindow(QMainWindow):
         finally:
             semaphore.release()
 
-        return result  # Will be emitted via WorkerThread.finished
+        return (range_label, result)
     
     def _extract_pog_data(self, results):
         level, pog_links = results
@@ -199,44 +200,54 @@ class MainWindow(QMainWindow):
             from functools import partial
             from PySide6.QtCore import QSemaphore
 
+            # n = len(pog_df)
+            # div_factor = 2
+            # chunk_size = math.ceil(n // div_factor)
+            # # chunk_size = n // div_factor
+            # lan_id = self.config_manager.get('lan')
+            # semaphore = QSemaphore(1)  # Global semaphore for download()
+
+            # partitions = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
+
             n = len(pog_df)
-            div_factor = 2
-            chunk_size = math.ceil(n // div_factor)
-            # chunk_size = n // div_factor
+            num_partitions = 2
+            min_partition_size = 20 if self.label_size == 1 else 32
+            partition_size = math.ceil(n / (num_partitions * min_partition_size)) * min_partition_size
             lan_id = self.config_manager.get('lan')
             semaphore = QSemaphore(1)  # Global semaphore for download()
 
-            chunks = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
-
-            n = len(pog_df)
-            div_factor = 2
-            chunk_size = n // div_factor
-            lan_id = self.config_manager.get('lan')
-            semaphore = QSemaphore(1)  # Global semaphore for download()
-
-            chunks = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
+            partitions = [(pog_df[i:i + partition_size], Label.Telxon()) for i in range(0, len(pog_df), partition_size)]
 
             worker_tuples = []
 
-            for i, (df_chunk, telxon_instance) in enumerate(chunks):
-                label = f"Chunk_{i+1} ({i+1}-{i+chunk_size+1})"
+            for i, (df_partition, telxon_instance) in enumerate(partitions):
+                label = f"Partition{i+1} ({i+1}-{i+partition_size})"
 
                 worker = WorkerThread(
                     self.scan_and_download,
-                    df_chunk,
+                    df_partition,
                     telxon_instance,
                     self.label_size,
                     (self.config_manager.get('yid'), self.config_manager.get('pwd')),
                     self.visibility,
                     lan_id,
-                    semaphore
+                    semaphore,
+                    status_callback=lambda msg: self.append_status(f"{label} {msg}"),
+                    range_label=i
                 )
                 worker_tuples.append((worker, label))
+
+            ordered_results = []
+            def collect_results(result):
+                range_label, path = result
+                ordered_results.append((range_label, path))
+                self.append_status(f"[Downloaded] {range_label}: {path}")
 
             manager = MultiWorkerManager(
                 worker_tuples,
                 status_logger=self.append_status,
-                per_result_callback=lambda path: self.append_status(f"[Downloaded] {path}")
+                per_result_callback=collect_results,
+                final_callback=lambda _: self.finalize_pdf(ordered_results)
             )
             manager.start()
 
@@ -252,6 +263,49 @@ class MainWindow(QMainWindow):
             final_callback=pog_final
         )
         manager.start()
+    
+    def finalize_pdf(self, ordered_results):
+        import fitz  # PyMuPDF
+        import os
+        import sys
+        import subprocess
+
+        try:
+            # 1. Sort by range start (e.g., "1–20")
+            sorted_results = sorted(ordered_results, key=lambda x: x[0])
+            paths = [path for _, path in sorted_results]
+
+            # 2. Merge PDFs
+            combined = fitz.open()
+            for path in paths:
+                with fitz.open(path) as part:
+                    combined.insert_pdf(part)
+            
+            combined_pdf_path = os.path.abspath("combined_labels.pdf")
+            combined.save(combined_pdf_path)
+            combined.close()
+
+            self.append_status(f"[Combined] PDF saved to {combined_pdf_path}")
+
+            # 3. Decorate
+            labeler = LabelDecorator.Label(combined_pdf_path, self.label_size)
+            labeler.get_crc_seq()
+            labeler.collect_labels()
+
+            # 4. Save to file
+            labeler.decorate_labels(self.pog_df, outfile="final_labels")
+
+            # 5. Open file
+            if sys.platform.startswith("win"):
+                os.startfile("final_labels.pdf")
+            elif sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", "final_labels.pdf"])
+            else:  # Linux
+                subprocess.Popen(["xdg-open", "final_labels.pdf"])
+            self.append_status("[Opened] final_labels.pdf")
+
+        except Exception as e:
+            self.append_status(f"[❌ Error] Finalizing PDF failed:\n{e}")
     
     """
     Utilities
