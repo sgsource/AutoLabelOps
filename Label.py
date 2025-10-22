@@ -118,7 +118,7 @@ class Telxon:
         ).click()
         update_status('Pressed Download')
 
-        time.sleep(2)
+        time.sleep(4)
 
         # teardown
         self.driver.quit()

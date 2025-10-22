@@ -205,28 +205,38 @@ class MainWindow(QMainWindow):
             from functools import partial
             from PySide6.QtCore import QSemaphore
 
-            # n = len(pog_df)
-            # div_factor = 2
-            # chunk_size = math.ceil(n // div_factor)
-            # # chunk_size = n // div_factor
-            # lan_id = self.config_manager.get('lan')
-            # semaphore = QSemaphore(1)  # Global semaphore for download()
-
-            # partitions = [(pog_df[i:i + chunk_size], Label.Telxon()) for i in range(0, len(pog_df), chunk_size)]
-
             n = len(pog_df)
-            num_partitions = 3
-            min_partition_size = 20 if self.label_size == 1 else 32
-            partition_size = math.ceil(n / (num_partitions * min_partition_size)) * min_partition_size
+            num_partitions = 2
+            min_partition_size = 20 if self.label_size == 2 else 32  # labels per page
             lan_id = self.config_manager.get('lan')
-            semaphore = QSemaphore(1)  # Global semaphore for download()
+            semaphore = QSemaphore(1)
 
-            partitions = [(pog_df[i:i + partition_size], Label.Telxon()) for i in range(0, len(pog_df), partition_size)]
+            # Step 1: Get page-aligned chunk boundaries
+            def partition_by_pages(total_items, page_size, num_chunks):
+                total_pages = math.ceil(total_items / page_size)
+                pages_per_chunk = [total_pages // num_chunks] * num_chunks
+                for i in range(total_pages % num_chunks):
+                    pages_per_chunk[i] += 1
 
+                partitions = []
+                start = 0
+                for pages in pages_per_chunk:
+                    end = min(start + pages * page_size, total_items)
+                    partitions.append((start, end))
+                    start = end
+
+                return partitions
+
+            # Step 2: Apply partitioning
+            ranges = partition_by_pages(n, min_partition_size, num_partitions)
+
+            # Step 3: Prepare worker threads
             worker_tuples = []
 
-            for i, (df_partition, telxon_instance) in enumerate(partitions):
-                label = f"Partition [Start={(i*partition_size)+1}]"
+            for i, (start, end) in enumerate(ranges):
+                df_partition = pog_df.iloc[start:end]
+                telxon_instance = Label.Telxon()
+                label = f"Partition {i+1} [{start+1}–{end}]"
 
                 worker = WorkerThread(
                     self.scan_and_download,
@@ -237,8 +247,7 @@ class MainWindow(QMainWindow):
                     self.visibility,
                     lan_id,
                     semaphore,
-                    status_callback=lambda msg: self.append_status(f"{label} {msg}"),
-                    range_label=i
+                    status_callback=lambda msg, label=label: self.append_status(f"{label} {msg}")
                 )
                 worker_tuples.append((worker, label))
 
@@ -283,6 +292,7 @@ class MainWindow(QMainWindow):
             # 2. Merge PDFs
             combined = fitz.open()
             for path in paths:
+                self.append_status(path)
                 with fitz.open(path) as part:
                     combined.insert_pdf(part)
             
