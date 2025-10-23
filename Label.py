@@ -113,6 +113,8 @@ class Telxon:
         ).click()
         update_status(f'Found PDF in email')
 
+        time.sleep(2) # almost necessary. email takes forever to load.
+
         WebDriverWait(driver, 30, poll_frequency=0.1).until(
             EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']"))
         ).click()
@@ -216,7 +218,8 @@ class Telxon:
                 )
                 # update_status(f'================\n{info_element.text}')
                 scanned_infos = info_element.text.split('\n')
-                update_status(f'{scanned_infos[0]}\t{scanned_infos[4]}')
+                # update_status(f'{scanned_infos[0]}\t{scanned_infos[4]}')
+                update_status(f'{scanned_infos[4][:-15]}') # just the num. ignore the text
 
                 # Confirm label was added
                 wait.until(
@@ -231,7 +234,6 @@ class Telxon:
                 update_status(f"Error with {crc}: {e}")
 
         update_status("Scanning complete.")
-
 
         # Telxon left hanging
 

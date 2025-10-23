@@ -206,7 +206,10 @@ class MainWindow(QMainWindow):
             from PySide6.QtCore import QSemaphore
 
             n = len(pog_df)
-            num_partitions = 2
+            # 6 fails on 2 threads
+            # 4 is most consistent
+            # 3 is faster on shorter pogs like 76 count. prob cuz of email overhead
+            num_partitions = 4
             min_partition_size = 20 if self.label_size == 2 else 32  # labels per page
             lan_id = self.config_manager.get('lan')
             semaphore = QSemaphore(1)
@@ -233,10 +236,13 @@ class MainWindow(QMainWindow):
             # Step 3: Prepare worker threads
             worker_tuples = []
 
+            accum_tabs = ''
             for i, (start, end) in enumerate(ranges):
                 df_partition = pog_df.iloc[start:end]
                 telxon_instance = Label.Telxon()
-                label = f"Partition {i+1} [{start+1}–{end}]"
+                # label = f"Partition {i+1} [{start+1}–{end}]"
+                label = start
+                accum_tabs += '\t'
 
                 worker = WorkerThread(
                     self.scan_and_download,
@@ -247,7 +253,7 @@ class MainWindow(QMainWindow):
                     self.visibility,
                     lan_id,
                     semaphore,
-                    status_callback=lambda msg, label=label: self.append_status(f"{label} {msg}")
+                    status_callback=lambda msg, label=label: self.append_status(f"{label}{accum_tabs}{msg}")
                 )
                 worker_tuples.append((worker, label))
 
@@ -261,7 +267,7 @@ class MainWindow(QMainWindow):
                 worker_tuples,
                 status_logger=self.append_status,
                 per_result_callback=collect_results,
-                final_callback=lambda _: self.finalize_pdf(ordered_results)
+                final_callback=self.finalize_pdf
             )
             manager.start()
 
@@ -287,6 +293,8 @@ class MainWindow(QMainWindow):
         try:
             # 1. Sort by range start (e.g., "1–20")
             sorted_results = sorted(ordered_results, key=lambda x: x[0])
+            for label, path in ordered_results:
+                print(f'{label} => {path}')
             paths = [path for _, path in sorted_results]
 
             # 2. Merge PDFs
