@@ -49,6 +49,13 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.edit_creds_btn)
 
+        # --- Intro ---
+        intro = "This app has many dependencies. It is a layer above standard workflow.\n"\
+                "If there is an error, please try restarting the app.\n"\
+                "Most operations are expected to complete within 3 minutes, but heavier workloads may take up to 10 minutes."
+        self.intro_label = QLabel(intro)
+        layout.addWidget(self.intro_label)
+
         # --- Label Size Section ---
         self.size_label = QLabel("Label Size:")
         layout.addWidget(self.size_label)
