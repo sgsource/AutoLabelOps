@@ -36,8 +36,10 @@ def get_pog_links(pog_num: str, visible=False, status_callback=None) -> list[tup
                 continue
             size = tds[2].text.strip()
             links = row.find_elements(By.TAG_NAME, "a")
+            
             for link in links[::2]:
                 href = link.get_attribute("href")
+                update_status(f"Found {href} POG PDF links.")
                 size_href_pairs.append((size, href))
 
         update_status(f"Found {len(size_href_pairs)} POG PDF links.")

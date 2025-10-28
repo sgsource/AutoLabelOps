@@ -3,3 +3,4 @@ output/
 test/
 venv/
 config.json
+*.pdf

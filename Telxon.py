@@ -24,7 +24,7 @@ class Telxon:
 
     NAVIGATION_STEPS = [
         ("3763435963668262110", 3),  # Item Management
-        ("6147166050736792236", 9),
+        ("6147166050736792236", 9),  # err right before this. some have additional before this
         ("6152138399588205344", 2),  # POGS
     ]
 
@@ -73,8 +73,8 @@ class Telxon:
             pog_input.send_keys(pog_num)
             pog_input.send_keys(Keys.ENTER)
 
-            WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.ID, self.SELECTORS["pog_submit"]))
+            WebDriverWait(driver, 20, poll_frequency=0.15).until(
+                EC.presence_of_element_located((By.ID, self.SELECTORS["pog_submit"]))
             ).click()
 
             # Get level

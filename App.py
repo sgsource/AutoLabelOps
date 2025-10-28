@@ -51,7 +51,8 @@ class MainWindow(QMainWindow):
 
         # --- Intro ---
         intro = "This app has many dependencies. It is a layer above standard workflow.\n"\
-                "If there is an error, please try restarting the app.\n"\
+                "While designed for robustness, cascading errors may arise from underlying system.\n"\
+                "If there is an error, please try typing the input again or restarting the app.\n"\
                 "Most operations are expected to complete within 3 minutes, but heavier workloads may take up to 10 minutes."
         self.intro_label = QLabel(intro)
         layout.addWidget(self.intro_label)
@@ -173,11 +174,12 @@ class MainWindow(QMainWindow):
         if status_callback:
             status_callback("Waiting for download slot...")
 
-        semaphore.acquire()
-        try:
-            result = telxon_instance.download(lan_id, visibility, status_callback)
-        finally:
-            semaphore.release()
+        # semaphore.acquire()
+        # try:
+        #     result = telxon_instance.download(lan_id, visibility, status_callback)
+        # finally:
+        #     semaphore.release()
+        result = telxon_instance.download(lan_id, visibility, status_callback)
 
         return (range_label, result)
     
@@ -248,8 +250,8 @@ class MainWindow(QMainWindow):
                 df_partition = pog_df.iloc[start:end]
                 telxon_instance = Label.Telxon()
                 # label = f"Partition {i+1} [{start+1}–{end}]"
-                label = start
                 accum_tabs += '\t'
+                label = accum_tabs + str(start)
 
                 worker = WorkerThread(
                     self.scan_and_download,
