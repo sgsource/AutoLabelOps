@@ -62,8 +62,15 @@ class Telxon:
             driver.find_element(By.ID, self.SELECTORS["sign_in"]).click()
 
             # Navigation
-            for ul_id, li_index in self.NAVIGATION_STEPS:
-                self._click_link(driver, ul_id, li_index, verbose)
+            # self._click_link_by_text(
+            #     driver=driver, ul_id="3763435963668262110",
+            #     substr="Item Management", verbose=verbose
+            # ) # doesnt work
+            # lis = self._click_link(driver, "3763435963668262110", -4, verbose=True) # Item Management. does not work.
+            self._click_link_rev(driver, '3763435963668262110', 4) # seems to work for my case
+            # self._click_link(driver, "3763435963668262110", 3, verbose=True) # Item Management # works. prev
+            self._click_link(driver, "6147166050736792236", 9, verbose) # err right before this. some have additional before this
+            self._click_link(driver, "6152138399588205344", 2, verbose) # POGS
 
             # POG input
             pog_input = WebDriverWait(driver, 10).until(
@@ -97,7 +104,45 @@ class Telxon:
                 print(f"li: {li.text}")
         li_elements[li_index].find_element(By.TAG_NAME, "a").click()
 
+        return li_elements
+    
+    @staticmethod
+    def _click_link_rev(driver, ul_id, rev_index, verbose=False):
+        """Click <a> inside <ul> by index"""
+        ul_element = driver.find_element(By.ID, ul_id)
+        li_elements = ul_element.find_elements(By.TAG_NAME, "li")
+        n = len(li_elements)
+        if verbose:
+            for li in li_elements:
+                print(f"li: {li.text}")
+        li_elements[n - rev_index].find_element(By.TAG_NAME, "a").click()
+
+        return li_elements
+    
+    @staticmethod
+    def _click_link_by_text(driver, ul_id, substr, verbose=False):
+        """Click <a> inside <ul> by index"""
+        ul_element = driver.find_element(By.ID, ul_id)
+        li_elements = ul_element.find_elements(By.TAG_NAME, "li")
+        for li in li_elements:
+            # print(f"li: {li.text}")
+            # a_element = li.find_element(By.TAG_NAME, "a")
+            # print(a_element.text)
+            if substr in li.text:
+                li.find_element(By.TAG_NAME, "a").click()
+                # print(f"li: {li.text}")
+                # WebDriverWait(driver, 10).until(
+                #     EC.element_to_be_clickable(li.find_element(By.TAG_NAME, "a"))
+                # ).click()
+
     def _navigate_to_pogs(self, driver, verbose=False):
         """Combined navigation steps to POGS"""
         for ul_id, li_index in self.NAVIGATION_STEPS:
             self._click_link(driver, ul_id, li_index, verbose)
+
+# t = Telxon()
+# t.get_level(
+#     98710,
+#     (543697, ''),
+#     visibility=True
+# )
