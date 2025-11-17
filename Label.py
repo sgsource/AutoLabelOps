@@ -8,6 +8,7 @@ from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import TimeoutException
 import time
 import pandas as pd
+import os
 
 from DriverManager import DriverManager
 
@@ -40,6 +41,22 @@ class Telxon:
             for li in li_elements:
                 print(f"li: {li.text}")
         li_elements[li_index].find_element(By.TAG_NAME, "a").click()
+    
+    @staticmethod
+    def _click_link_rev(driver, ul_id, rev_index, verbose=False):
+        """Click <a> inside <ul> by index"""
+        ul_element = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.ID, ul_id))
+        )
+        li_elements = ul_element.find_elements(By.TAG_NAME, "li")
+        n = len(li_elements)
+        if verbose:
+            print(n)
+            for li in li_elements:
+                print(f"li: {li.text}")
+        li_elements[n - rev_index].find_element(By.TAG_NAME, "a").click()
+
+        return li_elements
 
     def _fill_input_by_id(self, id: str, text: str, enter=False):
         input_field = self.driver.find_element(By.ID, id)
@@ -79,7 +96,7 @@ class Telxon:
         ).click()
         update_status('Submit button pressed')
 
-        submit_msg = WebDriverWait(driver, 30, poll_frequency=0.1).until(
+        submit_msg = WebDriverWait(driver, 30, poll_frequency=0.2).until(
             EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'has been scheduled for delivery to machine')]"))
         )
         print_id = submit_msg.text[12:18]
@@ -89,44 +106,53 @@ class Telxon:
         driver.get('https://outlook.office365.com/mail/')
 
         # Sign in
-        email_input = WebDriverWait(driver, 30, poll_frequency=0.1).until(
+        email_input = WebDriverWait(driver, 30, poll_frequency=0.2).until(
             EC.visibility_of_element_located((By.ID, 'i0116'))
         )
         email_input.send_keys(f'{lan_id}@aafes.com')
-        WebDriverWait(driver, 30, poll_frequency=0.1).until(
+        WebDriverWait(driver, 30, poll_frequency=0.2).until(
             EC.element_to_be_clickable((By.ID, 'idSIButton9'))
         ).click()
         # driver.find_element(By.ID, 'idSIButton9').click()
         update_status('Email accessed')
 
-        # must click entry, no preview.
-        mail_entry = WebDriverWait(driver, 30, poll_frequency=0.1).until(
-            EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, 'Has attachments machine PCL Report from ASAP PMrpt{print_id}')]"))
-        )
-        # aria-label="Has attachments machine PCL Report from ASAP PMrpt020683 7:38 AM No preview is available."
-        # PCL Report from ASAP PMrpt020683
-        mail_entry.click()
-        update_status('Found web element in inbox')
+        for attempt in range(3):
+            try:
+                # must click entry, no preview.
+                mail_entry = WebDriverWait(driver, 30, poll_frequency=0.2).until(
+                    EC.element_to_be_clickable((By.XPATH, f"//*[contains(@aria-label, 'Has attachments machine PCL Report from ASAP PMrpt{print_id}')]"))
+                )
+                # aria-label="Has attachments machine PCL Report from ASAP PMrpt020683 7:38 AM No preview is available."
+                # PCL Report from ASAP PMrpt020683
+                mail_entry.click()
+                update_status('Found web element in inbox')
+            except Exception as e:
+                update_status(f'Attempt {attempt} failed. {e} Retrying...')
+                time.sleep(1)
 
-        WebDriverWait(driver, 30, poll_frequency=0.1).until(
+        WebDriverWait(driver, 30, poll_frequency=0.2).until(
             EC.element_to_be_clickable((By.XPATH, f"//div[@title='PMrpt{print_id}.pdf']"))
         ).click()
         update_status(f'Found PDF in email')
 
         time.sleep(2) # almost necessary. email takes forever to load.
 
-        WebDriverWait(driver, 30, poll_frequency=0.1).until(
-            EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']"))
-        ).click()
-        update_status('Pressed Download')
+        filename = f'PMrpt{print_id}.pdf'
+        full_path = self._get_full_path(filename)
+        while not os.path.exists(full_path):
+            WebDriverWait(driver, 30, poll_frequency=0.2).until(
+                EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']"))
+            ).click()
+            update_status('Pressed Download')
+            time.sleep(2)
 
-        time.sleep(4)
+        # time.sleep(6)
 
         # teardown
         self.driver.quit()
         self.driver = None
 
-        filename = f'PMrpt{print_id}.pdf'
+        
         update_status(f'{filename} saved')
 
         return self._get_full_path(filename)
@@ -136,11 +162,12 @@ class Telxon:
         downloads_path = home_directory / "Downloads"
         return str(downloads_path / filename)
 
-    """
-    Step 1
-    Bottleneck
-    """
+    
     def scan_labels(self, subset, inches, creds, visibility=False, status_callback=None):
+        """
+        Step 1
+        Bottleneck
+        """
         yid, pwd = creds
 
         def update_status(msg):
@@ -177,16 +204,25 @@ class Telxon:
             return
 
         # Navigate to scan labels
-        NAV_TO_SCAN_LABELS = [
-            ('3763435963668262110', 2),
-            ('5702700700995105695', 1),
-        ]
-        for ul_id, li_index in NAV_TO_SCAN_LABELS:
-            try:
-                self._click_link(driver, ul_id, li_index)
-            except Exception as e:
-                update_status(f"Navigation failed at {ul_id}[{li_index}]: {e}")
-                return
+        # NAV_TO_SCAN_LABELS = [
+        #     ('3763435963668262110', 2),
+        #     ('5702700700995105695', 1),
+        # ]
+        # def _custom_click_dropdown(driver, text):
+        #     dropdown_element = WebDriverWait(driver, 20, poll_frequency=0.15).until(
+        #         EC.presence_of_element_located((By.TAG_NAME, "select"))
+        #     )
+
+        #     update_status(dropdown_element.text)
+        # _custom_click_dropdown(driver, 'Shelf Labels')
+        try:
+            self._click_link_rev(driver, '3763435963668262110', 5, True)
+
+            # self._click_link(driver, '3763435963668262110', 2)
+            self._click_link(driver, '5702700700995105695', 1)
+        except Exception as e:
+            update_status(f"Navigation failed: {e}")
+            return
 
         # Label batch description
         try:

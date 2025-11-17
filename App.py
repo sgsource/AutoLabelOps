@@ -108,6 +108,10 @@ class MainWindow(QMainWindow):
         self.status_log.setReadOnly(True)
         layout.addWidget(self.status_log)
 
+        other_info = 'Dev: 0x536F6F6765756E204F68'
+        self.other_label = QLabel(other_info)
+        layout.addWidget(self.other_label)
+
         # --- Central Widget ---
         container = QWidget()
         container.setLayout(layout)
@@ -247,7 +251,15 @@ class MainWindow(QMainWindow):
 
             accum_tabs = ''
             for i, (start, end) in enumerate(ranges):
+                # Skip partitions with 0 size
+                if end <= start:
+                    continue
+
                 df_partition = pog_df.iloc[start:end]
+                if df_partition.empty:
+                    continue  # extra safety check
+
+                # df_partition = pog_df.iloc[start:end]
                 telxon_instance = Label.Telxon()
                 # label = f"Partition {i+1} [{start+1}–{end}]"
                 accum_tabs += '\t'
