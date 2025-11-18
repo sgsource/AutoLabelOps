@@ -126,6 +126,7 @@ class Telxon:
                 # PCL Report from ASAP PMrpt020683
                 mail_entry.click()
                 update_status('Found web element in inbox')
+                break
             except Exception as e:
                 update_status(f'Attempt {attempt} failed. {e} Retrying...')
                 time.sleep(1)
@@ -149,7 +150,8 @@ class Telxon:
         # time.sleep(6)
 
         # teardown
-        self.driver.quit()
+        if self.driver:
+            self.driver.quit()
         self.driver = None
 
         
